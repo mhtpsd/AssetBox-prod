@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+////////////////////
+// NEXTAUTH TABLES
+////////////////////
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String? 
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String? 
+
+  user User @relation(fields: [userId], references: [id], onDelete:  Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete:  Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+////////////////////
+// USERS
+////////////////////
+model User {
+  id                 String    @id @default(uuid())
+  name               String?
+  username           String?   @unique
+  email              String    @unique
+  emailVerified      DateTime? 
+  image              String?
+  bio                String?
+  isAdmin            Boolean   @default(false)
+
+  // Payouts
+  paymentVerified    Boolean   @default(false)
+  walletBalance      Decimal   @default(0) @db.Decimal(10, 2)
+
+  // Legal
+  acceptedTermsAt    DateTime? 
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime? 
+
+  // NextAuth relations
+  accounts           Account[]
+  sessions           Session[]
+
+  // App relations
+  assets             Asset[]
+  orders             Order[]
+  cart               Cart? 
+  ownedAssets        UserAsset[]
+  earnings           Earning[]
+  payoutRequests     PayoutRequest[]
+  downloadLogs       DownloadLog[]
+  notifications      Notification[]
+  supportTickets     SupportTicket[] @relation("UserSupportTickets")
+
+  @@map("users")
+}
+
+////////////////////
+// ASSETS
+////////////////////
+model Asset {
+  id              String        @id @default(uuid())
+  ownerId         String
+
+  title           String
+  description     String        @db.Text
+  assetType       AssetType
+  category        String
+  subcategory     String? 
+  tags            String[]
+  licenseType     LicenseType   @default(STANDARD)
+
+  price           Decimal       @db.Decimal(10, 2)
+  status          AssetStatus   @default(DRAFT)
+
+  // Analytics
+  viewCount       Int           @default(0)
+  totalDownloads  Int           @default(0)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime? 
+
+  // Relations
+  owner           User          @relation(fields:  [ownerId], references: [id])
+  files           AssetFile[]
+  proofs          AssetProof[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  userAssets      UserAsset[]
+  earnings        Earning[]
+  downloadLogs    DownloadLog[]
+  versions        AssetVersion[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([assetType])
+  @@index([category])
+  @@map("assets")
+}
+
+enum AssetType {
+  TEXT
+  AUDIO
+  IMAGE
+  VIDEO
+  TWO_D
+  THREE_D
+}
+
+enum AssetStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  REMOVED
+}
+
+enum LicenseType {
+  STANDARD
+  COMMERCIAL
+  EXTENDED
+}
+
+////////////////////
+// ASSET FILES
+////////////////////
+model AssetFile {
+  id          String     @id @default(uuid())
+  assetId     String
+  fileType    FileType
+  fileUrl     String
+  fileSize    BigInt
+  fileFormat  String
+  mimeType    String
+  createdAt   DateTime   @default(now())
+
+  asset       Asset      @relation(fields:  [assetId], references: [id])
+
+  @@index([assetId])
+  @@map("asset_files")
+}
+
+enum FileType {
+  ORIGINAL
+  PREVIEW
+  THUMBNAIL
+}
+
+////////////////////
+// ASSET VERSIONS
+////////////////////
+model AssetVersion {
+  id          String    @id @default(uuid())
+  assetId     String
+  version     Int
+  changelog   String?   @db.Text
+  fileUrl     String
+  fileSize    BigInt
+  createdAt   DateTime  @default(now())
+
+  asset       Asset     @relation(fields: [assetId], references: [id])
+
+  @@unique([assetId, version])
+  @@index([assetId])
+  @@map("asset_versions")
+}
+
+////////////////////
+// OWNERSHIP PROOFS
+////////////////////
+model AssetProof {
+  id          String       @id @default(uuid())
+  assetId     String
+  proofType   ProofType
+  proofData   String       @db.Text
+  status      ProofStatus  @default(PENDING)
+  adminNote   String?      @db.Text
+  createdAt   DateTime     @default(now())
+
+  asset       Asset        @relation(fields:  [assetId], references: [id])
+
+  @@index([assetId])
+  @@map("asset_proofs")
+}
+
+enum ProofType {
+  FILE
+  TEXT
+  LINK
+}
+
+enum ProofStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+////////////////////
+// CART
+////////////////////
+model Cart {
+  id        String      @id @default(uuid())
+  userId    String      @unique
+  createdAt DateTime    @default(now())
+
+  user      User        @relation(fields:  [userId], references:  [id])
+  items     CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id       String @id @default(uuid())
+  cartId   String
+  assetId  String
+
+  cart     Cart   @relation(fields:  [cartId], references: [id])
+  asset    Asset  @relation(fields:  [assetId], references: [id])
+
+  @@unique([cartId, assetId])
+  @@map("cart_items")
+}
+
+////////////////////
+// ORDERS
+////////////////////
+model Order {
+  id              String        @id @default(uuid())
+  userId          String
+  totalAmount     Decimal       @db.Decimal(10, 2)
+  paymentStatus   PaymentStatus @default(PENDING)
+  stripePaymentId String? 
+
+  createdAt       DateTime      @default(now())
+
+  user            User          @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+
+  @@index([userId])
+  @@index([stripePaymentId])
+  @@map("orders")
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model OrderItem {
+  id       String  @id @default(uuid())
+  orderId  String
+  assetId  String
+  price    Decimal @db.Decimal(10, 2)
+
+  order    Order   @relation(fields: [orderId], references: [id])
+  asset    Asset   @relation(fields: [assetId], references: [id])
+
+  @@map("order_items")
+}
+
+////////////////////
+// USER ASSETS (DOWNLOAD RIGHTS)
+////////////////////
+model UserAsset {
+  id              String   @id @default(uuid())
+  userId          String
+  assetId         String
+  orderId         String? 
+  downloadedCount Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id])
+  asset           Asset    @relation(fields:  [assetId], references: [id])
+
+  @@unique([userId, assetId])
+  @@index([userId])
+  @@index([assetId])
+  @@map("user_assets")
+}
+
+////////////////////
+// DOWNLOAD LOGS
+////////////////////
+model DownloadLog {
+  id           String   @id @default(uuid())
+  userId       String
+  assetId      String
+  ipAddress    String
+  userAgent    String? 
+  downloadedAt DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+  asset        Asset    @relation(fields:  [assetId], references: [id])
+
+  @@index([userId])
+  @@index([assetId])
+  @@index([downloadedAt])
+  @@map("download_logs")
+}
+
+////////////////////
+// EARNINGS & PAYOUTS
+////////////////////
+model Earning {
+  id          String   @id @default(uuid())
+  userId      String
+  assetId     String
+  orderId     String
+  amount      Decimal  @db.Decimal(10, 2)
+  platformFee Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  asset       Asset    @relation(fields: [assetId], references:  [id])
+
+  @@index([userId])
+  @@index([orderId])
+  @@map("earnings")
+}
+
+model PayoutRequest {
+  id          String       @id @default(uuid())
+  userId      String
+  amount      Decimal      @db.Decimal(10, 2)
+  status      PayoutStatus @default(PENDING)
+  adminNote   String?      @db.Text
+  processedAt DateTime? 
+  createdAt   DateTime     @default(now())
+
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("payout_requests")
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+////////////////////
+// NOTIFICATIONS
+////////////////////
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  ASSET_APPROVED
+  ASSET_REJECTED
+  NEW_SALE
+  PAYOUT_PROCESSED
+  SYSTEM
+}
+
+////////////////////
+// SUPPORT TICKETS
+////////////////////
+model SupportTicket {
+  id        String         @id @default(uuid())
+  userId    String
+  subject   String
+  status    TicketStatus   @default(OPEN)
+  priority  TicketPriority @default(NORMAL)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  closedAt  DateTime? 
+
+  user      User           @relation("UserSupportTickets", fields: [userId], references: [id])
+  messages  TicketMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id        String   @id @default(uuid())
+  ticketId  String
+  senderId  String
+  isAdmin   Boolean  @default(false)
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_messages")
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}

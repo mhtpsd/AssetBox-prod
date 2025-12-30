@@ -1,0 +1,19 @@
+﻿{
+  "name": "@assetbox/email",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "clean": "rm -rf node_modules .turbo dist"
+  },
+  "dependencies": {
+    "@assetbox/templates": "*",
+    "nodemailer": "^6.9.0",
+    "resend": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^6.4.0",
+    "typescript": "^5.4.5"
+  }
+}

@@ -42,6 +42,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
       isGlobal: true,
       load: [configuration],
       validationSchema,
+      envFilePath: '.env.local',
     }),
 
     // Rate limiting

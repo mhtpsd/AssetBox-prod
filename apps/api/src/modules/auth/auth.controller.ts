@@ -7,7 +7,7 @@ import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService:  AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   /**
    * Get current session
@@ -25,7 +25,7 @@ export class AuthController {
   @Public()
   async validateSession(@Req() req: Request) {
     const sessionToken = req.cookies['next-auth. session-token'];
-    
+
     if (!sessionToken) {
       return { valid: false };
     }
@@ -41,14 +41,14 @@ export class AuthController {
   @UseGuards(AuthGuard)
   async logout(@Req() req: Request, @Res() res: Response) {
     const sessionToken = req.cookies['next-auth.session-token'];
-    
+
     if (sessionToken) {
       await this.authService.deleteSession(sessionToken);
     }
 
     // Clear cookie
     res.clearCookie('next-auth.session-token');
-    
+
     return res.json({ success: true });
   }
 }

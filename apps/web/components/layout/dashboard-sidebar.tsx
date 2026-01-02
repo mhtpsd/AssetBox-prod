@@ -58,11 +58,6 @@ const sidebarLinks = [
     label: 'Settings',
     icon: Settings,
   },
-  {
-    href: '/dashboard/support',
-    label: 'Support',
-    icon: HelpCircle,
-  },
 ];
 
 export function DashboardSidebar() {

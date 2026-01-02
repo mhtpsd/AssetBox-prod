@@ -33,8 +33,8 @@ export default () => ({
   },
 
   meilisearch: {
-    host: process.env. MEILI_HOST || 'http://localhost:7700',
-    apiKey: process.env.MEILI_MASTER_KEY,
+    host: process.env. MEILISEARCH_HOST || 'http://localhost:7700',
+    apiKey: process.env.MEILISEARCH_API_KEY,
   },
 
   platform: {

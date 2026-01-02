@@ -1,13 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Loader2, Mail, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
+import { Loader2, Mail } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,36 +16,66 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { toast } from 'sonner';
-
-const loginSchema = z.object({
-  email:  z.string().email('Please enter a valid email address'),
-});
-
-type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+  const { data: session, status } = useSession();
+  const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
-  const [sentEmail, setSentEmail] = useState('');
 
-  const {
-    register,
-    handleSubmit,
-    formState:  { errors },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  });
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+  const error = searchParams.get('error');
 
-  const onSubmit = async (data: LoginFormData) => {
+  // Log for debugging
+  useEffect(() => {
+    console.log('🔍 Login page params:', { 
+      callbackUrl, 
+      error, 
+      status, 
+      hasSession: !!session 
+    });
+  }, [callbackUrl, error, status, session]);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (status === 'authenticated' && session) {
+      console.log('✅ Already authenticated, redirecting to:', callbackUrl);
+      router.push(callbackUrl);
+    }
+  }, [status, session, callbackUrl, router]);
+
+  // Show error if any
+  useEffect(() => {
+    if (error) {
+      console.error('❌ Login error:', error);
+      if (error === 'Verification') {
+        toast.error('The sign-in link has expired or was already used.  Please request a new one.');
+      } else if (error === 'Configuration') {
+        toast.error('Server configuration error. Please contact support.');
+      } else if (error === 'AccessDenied') {
+        toast.error('Access denied. Please try again.');
+      } else if (error === 'EmailSignin') {
+        toast.error('Failed to send email. Please try again.');
+      } else {
+        toast.error(`An error occurred: ${error}. Please try again.`);
+      }
+    }
+  }, [error]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!email) {
+      toast.error('Please enter your email');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       const result = await signIn('email', {
-        email: data. email,
+        email,
         redirect: false,
         callbackUrl,
       });
@@ -56,9 +83,8 @@ export default function LoginPage() {
       if (result?.error) {
         toast.error('Failed to send login link.  Please try again.');
       } else {
-        setEmailSent(true);
-        setSentEmail(data. email);
-        toast.success('Login link sent!  Check your email.');
+        toast.success('Check your email for the login link! ');
+        router.push('/login/verify');
       }
     } catch (error) {
       toast.error('Something went wrong. Please try again.');
@@ -67,113 +93,64 @@ export default function LoginPage() {
     }
   };
 
-  // Email sent confirmation screen
-  if (emailSent) {
+  // Show loading while checking auth status
+  if (status === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-              <Mail className="h-8 w-8 text-primary" />
-            </div>
-            <CardTitle className="text-2xl">Check your email</CardTitle>
-            <CardDescription className="mt-2">
-              We sent a login link to
-              <br />
-              <span className="font-medium text-foreground">{sentEmail}</span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-center text-sm text-muted-foreground">
-              Click the link in the email to sign in.  The link will expire in 15
-              minutes.
-            </p>
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setEmailSent(false);
-                  setSentEmail('');
-                }}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Use a different email
-              </Button>
-            </div>
-            <p className="text-center text-xs text-muted-foreground">
-              Didn't receive the email? Check your spam folder or{' '}
-              <button
-                className="text-primary underline-offset-4 hover:underline"
-                onClick={() => {
-                  setEmailSent(false);
-                }}
-              >
-                try again
-              </button>
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-screen items-center justify-center bg-mesh">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
+  // Don't render if already authenticated
+  if (status === 'authenticated') {
+    return null;
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <Link href="/" className="mx-auto mb-4">
-            <h1 className="text-2xl font-bold">AssetBox</h1>
-          </Link>
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>
-            Sign in to your account to continue
+    <div className="flex min-h-screen items-center justify-center p-4 bg-mesh">
+      {/* Background decoration */}
+      <div className="absolute inset-0 -z-10 h-full w-full bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]" />
+      
+      <Card className="w-full max-w-md shadow-2xl animate-slide-up">
+        <CardHeader className="space-y-3 text-center">
+          <div className="mx-auto w-fit p-3 bg-primary/10 rounded-full mb-2">
+            <Mail className="h-8 w-8 text-primary" />
+          </div>
+          <CardTitle className="text-3xl font-bold">Welcome to AssetBox</CardTitle>
+          <CardDescription className="text-base">
+            Sign in with your email to access premium digital assets
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="you@example.com"
-                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
-                {...register('email')}
+                required
+                className="h-11"
               />
-              {errors.email && (
-                <p className="text-sm text-destructive">
-                  {errors.email. message}
-                </p>
-              )}
             </div>
-
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending link...
-                </>
-              ) : (
-                <>
-                  <Mail className="mr-2 h-4 w-4" />
-                  Send login link
-                </>
-              )}
+            <Button
+              type="submit"
+              className="w-full h-11 text-base font-semibold"
+              disabled={isLoading}
+            >
+              {isLoading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+              {!isLoading && <Mail className="mr-2 h-5 w-5" />}
+              {isLoading ? 'Sending magic link...' : 'Send Magic Link'}
             </Button>
+            
+            <p className="text-xs text-center text-muted-foreground pt-2">
+              We'll send you a secure login link to your email
+            </p>
           </form>
-
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            By signing in, you agree to our{' '}
-            <Link href="/terms" className="text-primary hover:underline">
-              Terms of Service
-            </Link>{' '}
-            and{' '}
-            <Link href="/privacy" className="text-primary hover: underline">
-              Privacy Policy
-            </Link>
-          </div>
         </CardContent>
       </Card>
     </div>

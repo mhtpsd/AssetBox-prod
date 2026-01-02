@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { useCartStore } from '@/stores/cart-store';
 import { CartDrawer } from '@/components/cart/cart-drawer';
 import { getInitials } from '@/lib/utils';
@@ -41,8 +41,8 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold">AssetBox</span>
+          <Link href={isAuthenticated ? "/search" : "/"} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <span className="text-xl font-bold text-gradient">AssetBox</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -230,6 +230,7 @@ export function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
+              <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
               <nav className="flex flex-col gap-4 pt-8">
                 <Link
                   href="/search"

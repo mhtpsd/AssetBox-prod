@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Mail, XCircle } from 'lucide-react';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
@@ -15,63 +14,34 @@ import {
 } from '@/components/ui/card';
 
 export default function VerifyPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const error = searchParams.get('error');
 
-  useEffect(() => {
-    // NextAuth handles verification automatically
-    // This page shows status to user
-    const error = searchParams.get('error');
-    
-    if (error) {
-      setStatus('error');
-    } else {
-      // If no error, verification was successful
-      setStatus('success');
-      // Redirect to dashboard after short delay
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 2000);
-    }
-  }, [searchParams, router]);
-
-  if (status === 'loading') {
+  // If there's an error parameter, show error state
+  if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="flex flex-col items-center py-12">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="mt-4 text-lg font-medium">Verifying your login... </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Please wait while we sign you in. 
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (status === 'error') {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <Card className="w-full max-w-md">
+      <div className="flex min-h-screen items-center justify-center px-4 bg-mesh">
+        <div className="absolute inset-0 -z-10 h-full w-full bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]" />
+        
+        <Card className="w-full max-w-md shadow-2xl animate-scale-in">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-              <XCircle className="h-8 w-8 text-destructive" />
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10 ring-4 ring-destructive/20">
+              <XCircle className="h-10 w-10 text-destructive" />
             </div>
-            <CardTitle className="text-2xl">Verification Failed</CardTitle>
-            <CardDescription>
-              The login link is invalid or has expired. 
+            <CardTitle className="text-3xl font-bold">Verification Failed</CardTitle>
+            <CardDescription className="text-base">
+              The login link is invalid or has expired.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-center text-sm text-muted-foreground">
-              Login links expire after 15 minutes for security.  Please request a
-              new one.
-            </p>
-            <Button asChild className="w-full">
-              <Link href="/login">Request new login link</Link>
+            <div className="rounded-lg bg-muted p-4">
+              <p className="text-sm text-muted-foreground">
+                🔒 Login links expire after 24 hours for security. Please request a
+                new one to continue.
+              </p>
+            </div>
+            <Button asChild className="w-full h-11 text-base font-semibold">
+              <Link href="/login">Request New Login Link</Link>
             </Button>
           </CardContent>
         </Card>
@@ -79,21 +49,35 @@ export default function VerifyPage() {
     );
   }
 
+  // Default: Show "check your email" message
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center px-4 bg-mesh">
+      <div className="absolute inset-0 -z-10 h-full w-full bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]" />
+      
+      <Card className="w-full max-w-md shadow-2xl animate-scale-in">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-            <CheckCircle className="h-8 w-8 text-green-600" />
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/20 animate-pulse">
+            <Mail className="h-10 w-10 text-primary" />
           </div>
-          <CardTitle className="text-2xl">You're signed in! </CardTitle>
-          <CardDescription>
-            Redirecting you to your dashboard...
+          <CardTitle className="text-3xl font-bold">Check Your Email</CardTitle>
+          <CardDescription className="text-base">
+            We sent you a login link. Please check your email to sign in.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
+            <p className="text-sm text-foreground">
+              ✉️ Click the link in the email to sign in to your account. The link will
+              expire in 24 hours.
+            </p>
+          </div>
+          <div className="space-y-3 pt-2">
+            <p className="text-xs text-center text-muted-foreground">
+              Didn't receive the email? Check your spam folder or request a new link.
+            </p>
+            <Button asChild variant="outline" className="w-full h-11">
+              <Link href="/login">Back to Login</Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

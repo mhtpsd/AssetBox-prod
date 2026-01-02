@@ -1,18 +1,19 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { DashboardSidebar } from '@/components/layout/dashboard-sidebar';
 import { Header } from '@/components/layout/header';
+import { DashboardSidebar } from '@/components/layout/dashboard-sidebar';
 
 export default async function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children:  React.ReactNode;
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session?. user) {
-    redirect('/login');
+  // Redirect to login if not authenticated
+  if (! session?. user) {
+    redirect('/login? callbackUrl=/dashboard');
   }
 
   return (

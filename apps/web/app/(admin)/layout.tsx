@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Header } from '@/components/layout/header';
-import { AdminSidebar } from '@/components/layout/admin-sidebar';
+import AdminSidebar from '@/components/layout/admin-sidebar';
 
 export default async function AdminLayout({
   children,
@@ -11,11 +11,13 @@ export default async function AdminLayout({
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session?. user) {
-    redirect('/login');
+  // Redirect to login if not authenticated
+  if (!session?.user) {
+    redirect('/login? callbackUrl=/admin');
   }
 
-  if (! session. user.isAdmin) {
+  // Redirect to dashboard if not admin
+  if (!session.user.isAdmin) {
     redirect('/dashboard');
   }
 

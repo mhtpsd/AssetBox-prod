@@ -68,7 +68,6 @@ export class SearchService implements OnModuleInit {
         'attribute',
         'sort',
         'exactness',
-        'totalDownloads: desc', // Boost popular assets
       ],
     });
   }

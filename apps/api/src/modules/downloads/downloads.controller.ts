@@ -22,7 +22,7 @@ export class DownloadsController {
   /**
    * Generate download URL (rate limited)
    */
-  @Post(': assetId')
+  @Post(':assetId')
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 downloads per minute
   async download(
     @CurrentUser('id') userId: string,

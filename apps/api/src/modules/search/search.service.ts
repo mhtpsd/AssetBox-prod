@@ -1,5 +1,7 @@
 import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { MeiliSearch, Index } from 'meilisearch';
+import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../../services/storage/storage.service';
 
 export interface AssetDocument {
   id: string;
@@ -21,13 +23,78 @@ export interface AssetDocument {
 
 @Injectable()
 export class SearchService implements OnModuleInit {
-  private readonly logger = new Logger(SearchService. name);
+  private readonly logger = new Logger(SearchService.name);
   private assetsIndex: Index<AssetDocument>;
 
-  constructor(@Inject('MEILISEARCH') private readonly meili: MeiliSearch) {}
+  constructor(
+    @Inject('MEILISEARCH') private readonly meili: MeiliSearch,
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async onModuleInit() {
     await this.initializeIndex();
+    await this.autoSyncAssets();
+  }
+
+  /**
+   * Auto-sync assets if index is empty
+   */
+  private async autoSyncAssets() {
+    try {
+      const stats = await this.assetsIndex.getStats();
+      
+      if (stats.numberOfDocuments === 0) {
+        this.logger.log('Index is empty, syncing all approved assets...');
+        
+        const assets = await this.prisma.asset.findMany({
+          where: {
+            status: 'APPROVED',
+            deletedAt: null,
+          },
+          include: {
+            owner: {
+              select: {
+                username: true,
+              },
+            },
+            files: {
+              where: { fileType: 'THUMBNAIL' },
+              take: 1,
+            },
+          },
+        });
+
+        if (assets.length > 0) {
+          const searchDocuments: AssetDocument[] = assets.map((asset) => ({
+            id: asset.id,
+            title: asset.title,
+            description: asset.description,
+            assetType: asset.assetType,
+            category: asset.category,
+            subcategory: asset.subcategory || undefined,
+            tags: asset.tags,
+            price: Number(asset.price),
+            licenseType: asset.licenseType,
+            ownerId: asset.ownerId,
+            ownerUsername: asset.owner.username || '',
+            thumbnailUrl: asset.files[0]?.fileUrl
+              ? this.storage.getPublicUrl(asset.files[0].fileUrl)
+              : undefined,
+            totalDownloads: asset.totalDownloads,
+            viewCount: asset.viewCount,
+            createdAt: asset.createdAt.getTime(),
+          }));
+
+          await this.indexAssets(searchDocuments);
+          this.logger.log(`Auto-synced ${assets.length} assets to search index`);
+        }
+      } else {
+        this.logger.log(`Index already contains ${stats.numberOfDocuments} documents`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to auto-sync assets: ${error.message}`);
+    }
   }
 
   /**
@@ -75,8 +142,6 @@ export class SearchService implements OnModuleInit {
         'attribute',
         'sort',
         'exactness',
-        'totalDownloads: desc',
-        'viewCount:desc',
       ]);
 
       this.logger.log('Meilisearch index initialized successfully');
@@ -252,5 +317,12 @@ export class SearchService implements OnModuleInit {
       this.logger.error(`Failed to get index stats: ${error.message}`);
       return null;
     }
+  }
+
+  /**
+   * Get the assets index (for use by other services)
+   */
+  getIndex() {
+    return this.assetsIndex;
   }
 }

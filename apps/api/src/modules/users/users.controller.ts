@@ -69,7 +69,7 @@ export class UsersController {
    * Get public user profile by username
    */
   @Public()
-  @Get(': username')
+  @Get(':username')
   async getProfile(@Param('username') username: string) {
     return this.usersService. findByUsername(username);
   }

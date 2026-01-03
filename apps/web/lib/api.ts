@@ -88,8 +88,12 @@ export const assetsApi = {
     api.patch(`/assets/${id}`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  submit: (id: string, proof: { type: string; data: string }) =>
-    api.post(`/assets/${id}/submit`, { proof }),
+  submit: (id: string, proof: { type: string; data: string; notes?: string }) =>
+    api.post(`/assets/${id}/submit`, { 
+      proofType: proof.type, 
+      proofData: proof.data,
+      notes: proof.notes 
+    }),
   delete: (id:  string) => api.delete(`/assets/${id}`),
   getMyUploads: (params?: { status?: string; page?: number; limit?:  number }) =>
     api.get('/assets/my-uploads', { params }),

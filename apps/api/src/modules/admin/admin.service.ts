@@ -501,4 +501,67 @@ export class AdminService {
       totalRevenue:  Number(totalRevenue._sum.totalAmount || 0),
     };
   }
+
+  /**
+   * Reindex all approved assets to Meilisearch
+   */
+  async reindexAssets() {
+    this.logger.log('Starting asset reindexing...');
+
+    try {
+      const assets = await this.prisma.asset.findMany({
+        where: {
+          status: 'APPROVED',
+          deletedAt: null,
+        },
+        include: {
+          owner: {
+            select: {
+              username: true,
+            },
+          },
+          files: {
+            where: { fileType: 'THUMBNAIL' },
+            take: 1,
+          },
+        },
+      });
+
+      const searchDocuments: AssetDocument[] = assets.map((asset) => ({
+        id: asset.id,
+        title: asset.title,
+        description: asset.description,
+        assetType: asset.assetType,
+        category: asset.category,
+        subcategory: asset.subcategory || undefined,
+        tags: asset.tags,
+        price: Number(asset.price),
+        licenseType: asset.licenseType,
+        ownerId: asset.ownerId,
+        ownerUsername: asset.owner.username || '',
+        thumbnailUrl: asset.files[0]?.fileUrl
+          ? this.storage.getPublicUrl(asset.files[0].fileUrl)
+          : undefined,
+        totalDownloads: asset.totalDownloads,
+        viewCount: asset.viewCount,
+        createdAt: asset.createdAt.getTime(),
+      }));
+
+      if (searchDocuments.length > 0) {
+        await this.search.indexAssets(searchDocuments);
+        this.logger.log(`Successfully reindexed ${searchDocuments.length} assets`);
+      } else {
+        this.logger.log('No assets to reindex');
+      }
+
+      return {
+        success: true,
+        count: searchDocuments.length,
+        message: `Successfully reindexed ${searchDocuments.length} assets`,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to reindex assets: ${error.message}`);
+      throw error;
+    }
+  }
 }

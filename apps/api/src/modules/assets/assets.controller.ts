@@ -66,7 +66,7 @@ export class AssetsController {
   /**
    * Update asset
    */
-  @Patch(': id')
+  @Patch(':id')
   @UseInterceptors(FilesInterceptor('files', 10))
   async update(
     @CurrentUser('id') userId: string,
@@ -80,7 +80,7 @@ export class AssetsController {
   /**
    * Submit asset for review
    */
-  @Post(': id/submit')
+  @Post(':id/submit')
   async submit(
     @CurrentUser('id') userId: string,
     @Param('id', ParseUUIDPipe) id: string,

@@ -1,6 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { MarketplaceService, MarketplaceQueryParams } from './marketplace.service';
+import { Controller, Get, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import { MarketplaceService } from './marketplace.service';
 import { Public } from '../../common/decorators/public.decorator';
+import { MarketplaceQueryDto } from './dto/marketplace-query.dto';
 
 @Controller('marketplace')
 @Public()
@@ -8,12 +9,12 @@ export class MarketplaceController {
   constructor(private readonly marketplaceService: MarketplaceService) {}
 
   @Get()
-  async list(@Query() query: MarketplaceQueryParams) {
+  async list(@Query() query: MarketplaceQueryDto) {
     return this.marketplaceService.search(query);
   }
 
   @Get('search')
-  async search(@Query() query: MarketplaceQueryParams) {
+  async search(@Query() query: MarketplaceQueryDto) {
     return this.marketplaceService.search(query);
   }
 
@@ -23,7 +24,9 @@ export class MarketplaceController {
   }
 
   @Get('featured')
-  async getFeatured(@Query('limit') limit?: number) {
-    return this.marketplaceService.getFeatured(limit || 8);
+  async getFeatured(
+    @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number,
+  ) {
+    return this.marketplaceService.getFeatured(limit);
   }
 }

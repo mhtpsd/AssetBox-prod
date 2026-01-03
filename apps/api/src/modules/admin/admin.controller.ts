@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Body,
   Param,
@@ -113,5 +114,13 @@ export class AdminController {
     @Body() dto: RejectPayoutDto,
   ) {
     return this.adminService.rejectPayout(payoutId, dto.reason);
+  }
+
+  /**
+   * Reindex all approved assets to Meilisearch
+   */
+  @Post('assets/reindex')
+  async reindexAssets() {
+    return this.adminService.reindexAssets();
   }
 }

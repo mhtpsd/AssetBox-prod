@@ -63,17 +63,28 @@ export class StorageService {
   };
 
   constructor(private readonly config: ConfigService) {
-    this.endpoint = this.config. get<string>('storage. endpoint')!;
+    this.endpoint = this.config.get<string>('storage.endpoint')!;
     this.privateBucket = this.config.get<string>('storage.bucketPrivate')!;
-    this.publicBucket = this. config.get<string>('storage.bucketPublic')!;
-    this. cdnUrl = this.config.get<string>('storage. cdnUrl')!;
+    this.publicBucket = this.config.get<string>('storage.bucketPublic')!;
+    this.cdnUrl = this.config.get<string>('storage.cdnUrl')!;
+
+    const accessKey = this.config.get<string>('storage.accessKey');
+    const secretKey = this.config.get<string>('storage.secretKey');
+    const region = this.config.get<string>('storage.region') || 'us-east-1';
+
+    if (!accessKey || !secretKey) {
+      this.logger.error('Storage credentials are missing!');
+      throw new Error('Storage credentials not configured');
+    }
+
+    this.logger.log(`Initializing S3 client with endpoint: ${this.endpoint}`);
 
     this.s3 = new S3Client({
       endpoint: this.endpoint,
-      region: this.config.get<string>('storage. region') || 'auto',
+      region: region,
       credentials: {
-        accessKeyId: this. config.get<string>('storage.accessKey')!,
-        secretAccessKey: this.config.get<string>('storage. secretKey')!,
+        accessKeyId: accessKey,
+        secretAccessKey: secretKey,
       },
       forcePathStyle: true, // Required for MinIO
     });

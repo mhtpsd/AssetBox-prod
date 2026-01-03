@@ -2,19 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../../services/storage/storage.service';
 import { SearchService } from '../search/search.service';
-
-export interface MarketplaceQueryParams {
-  query?: string;
-  assetType?: string;
-  category?: string;
-  subcategory?: string;
-  licenseType?: string;
-  minPrice?:  number;
-  maxPrice?: number;
-  sort?: string;
-  page?: number;
-  limit?: number;
-}
+import { MarketplaceQueryDto } from './dto/marketplace-query.dto';
 
 @Injectable()
 export class MarketplaceService {
@@ -24,7 +12,7 @@ export class MarketplaceService {
     private readonly searchService:  SearchService,
   ) {}
 
-  async search(params: MarketplaceQueryParams) {
+  async search(params: MarketplaceQueryDto) {
     const {
       query = '',
       assetType,

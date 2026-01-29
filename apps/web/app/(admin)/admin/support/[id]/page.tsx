@@ -317,7 +317,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   <XCircle className="mr-2 h-4 w-4" />
                   Close Ticket
                 </Button>
-              )}
+              )}   
               {(String(ticket.status) === 'closed' || String(ticket.status) === 'resolved') && (
                 <Button
                   variant="outline"

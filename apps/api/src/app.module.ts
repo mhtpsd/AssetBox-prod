@@ -8,6 +8,10 @@ import { BullModule } from '@nestjs/bullmq';
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation';
 
+// App
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
 // Global Modules
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { StorageModule } from './services/storage/storage.module';
@@ -37,7 +41,6 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
 @Module({
   imports: [
-    // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
@@ -47,9 +50,9 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
     // Rate limiting
     ThrottlerModule.forRoot([
-      { name: 'short', ttl:  1000, limit: 3 },
-      { name: 'medium', ttl: 10000, limit: 20 },
-      { name: 'long', ttl: 60000, limit: 100 },
+      { name: 'short', ttl: 1000, limit: 10 },
+      { name: 'medium', ttl: 10000, limit: 50 },
+      { name: 'long', ttl: 60000, limit: 300 },
     ]),
 
     // Queue
@@ -59,6 +62,9 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
         connection: {
           host: configService.get('redis.host'),
           port: configService.get('redis.port'),
+          ...(configService.get('redis.password') && {
+            password: configService.get('redis.password'),
+          }),
         },
       }),
       inject: [ConfigService],
@@ -87,7 +93,9 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     // Workers
     MediaModule,
   ],
+  controllers: [AppController],
   providers: [
+    AppService,
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },

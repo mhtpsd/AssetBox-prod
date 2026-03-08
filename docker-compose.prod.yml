@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: assetbox-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-assetbox}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-assetbox}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - assetbox-network
+
+  # Redis (Queue & Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: assetbox-redis
+    restart: always
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - assetbox-network
+
+  # Meilisearch (Search Engine)
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    container_name: assetbox-meilisearch
+    restart: always
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILI_ENV: production
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:7700/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - assetbox-network
+
+  # MinIO (S3-Compatible Storage)
+  minio:
+    image: minio/minio:latest
+    container_name: assetbox-minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - assetbox-network
+
+  # NestJS API
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: assetbox-api
+    restart: always
+    env_file:
+      - apps/api/.env
+    environment:
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - '3001:3001'
+    networks:
+      - assetbox-network
+
+  # Next.js Web
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: assetbox-web
+    restart: always
+    env_file:
+      - apps/web/.env
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - api
+    ports:
+      - '3000:3000'
+    networks:
+      - assetbox-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  meilisearch_data:
+  minio_data:
+
+networks:
+  assetbox-network:
+    name: assetbox-network

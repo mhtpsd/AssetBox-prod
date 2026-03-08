@@ -18,15 +18,6 @@ export const authOptions: NextAuthOptions = {
 
       async sendVerificationRequest({ identifier: email, url }) {
         try {
-          console.log('🔐 Login link requested for:', email);
-          console.log('📧 Magic link URL:', url);
-          
-          // Parse the URL to show token info
-          const urlObj = new URL(url);
-          console.log('   Base URL:', urlObj.origin + urlObj.pathname);
-          console.log('   Has token param:', urlObj.searchParams.has('token'));
-          console.log('   Has callbackUrl:', urlObj.searchParams.has('callbackUrl'));
-
           await resend.emails.send({
             from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
             to: email,
@@ -49,10 +40,8 @@ export const authOptions: NextAuthOptions = {
               </div>
             `,
           });
-
-          console.log('✅ Email sent successfully');
         } catch (error) {
-          console.error('❌ Failed to send email:', error);
+          console.error('Failed to send verification email:', error);
           throw new Error('Failed to send verification email');
         }
       },
@@ -77,31 +66,22 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       // Allow sign in
-      console.log('✅ signIn callback:', { userId: user.id, email: user.email });
       return true;
     },
 
     async redirect({ url, baseUrl }) {
-      // Handle redirects properly
-      console.log('🔄 redirect callback:', { url, baseUrl });
-
       // If url is relative, prepend baseUrl
       if (url.startsWith('/')) {
-        const redirectUrl = `${baseUrl}${url}`;
-        console.log('  → Redirecting to relative:', redirectUrl);
-        return redirectUrl;
+        return `${baseUrl}${url}`;
       }
 
       // If url is on same origin, allow
       if (new URL(url).origin === baseUrl) {
-        console.log('  → Redirecting to same origin:', url);
         return url;
       }
 
       // Default to dashboard
-      const dashboardUrl = `${baseUrl}/dashboard`;
-      console.log('  → Redirecting to default dashboard:', dashboardUrl);
-      return dashboardUrl;
+      return `${baseUrl}/dashboard`;
     },
 
     async session({ session, user }) {
@@ -109,7 +89,6 @@ export const authOptions: NextAuthOptions = {
         session.user.id = user.id;
         session.user.username = user.username as string;
         session.user.isAdmin = (user as any).isAdmin || false;
-        console.log('👤 session callback:', { userId: user.id, username: user.username });
       }
       return session;
     },

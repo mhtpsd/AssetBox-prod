@@ -4,12 +4,23 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: '**',
-      },
-      {
+        // MinIO / S3-compatible storage (set NEXT_PUBLIC_STORAGE_URL in production)
         protocol: 'http',
         hostname: 'localhost',
+        port: '9000',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.amazonaws.com',
+      },
+      {
+        // Avatar providers
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
       },
     ],
   },

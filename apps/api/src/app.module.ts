@@ -35,6 +35,9 @@ import { SupportModule } from './modules/support/support.module';
 // Workers
 import { MediaModule } from './workers/media/media.module';
 
+// Kafka
+import { KafkaModule } from './kafka/kafka.module';
+
 // Common
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -92,6 +95,9 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
     // Workers
     MediaModule,
+
+    // Kafka (Event-Driven Architecture)
+    KafkaModule,
   ],
   controllers: [AppController],
   providers: [

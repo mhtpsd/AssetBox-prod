@@ -3,13 +3,22 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
+import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { KafkaProducerService } from '../../kafka/kafka.producer.service';
+import { UserRegisteredEvent } from '@assetbox/types';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly kafkaProducer: KafkaProducerService,
+  ) {}
 
   /**
    * Find user by ID
@@ -191,16 +200,34 @@ export class UsersService {
 
   /**
    * Accept terms of service
+   * Also used as the user "registration complete" trigger for event publishing.
    */
   async acceptTerms(userId: string) {
-    return this.prisma. user.update({
+    const user = await this.prisma.user.update({
       where: { id: userId },
       data: { acceptedTermsAt: new Date() },
       select: {
         id: true,
-        acceptedTermsAt:  true,
+        email: true,
+        name: true,
+        acceptedTermsAt: true,
       },
     });
+
+    // Publish user.registered event (terms acceptance = completed onboarding)
+    const event: UserRegisteredEvent = {
+      eventId: uuidv4(),
+      timestamp: new Date().toISOString(),
+      payload: {
+        userId: user.id,
+        email: user.email,
+        name: user.name ?? '',
+      },
+    };
+    await this.kafkaProducer.emit('user-events', event);
+    this.logger.log(`user.registered event emitted for user ${user.id}`);
+
+    return { id: user.id, acceptedTermsAt: user.acceptedTermsAt };
   }
 
   /**

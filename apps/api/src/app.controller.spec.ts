@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { KafkaProducerService } from './kafka/kafka.producer.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -8,7 +9,15 @@ describe('AppController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
-      providers: [AppService],
+      providers: [
+        AppService,
+        { provide: 'PrismaService', useValue: {} },
+        { provide: 'ConfigService', useValue: { get: jest.fn() } },
+        {
+          provide: KafkaProducerService,
+          useValue: { isConnected: jest.fn().mockReturnValue(true) },
+        },
+      ],
     }).compile();
 
     appController = app.get<AppController>(AppController);

@@ -28,4 +28,8 @@ export const validationSchema = Joi.object({
 
   PLATFORM_COMMISSION_PERCENT:  Joi.number().default(10),
   MINIMUM_PAYOUT_AMOUNT:  Joi.number().default(50),
+
+  KAFKA_BROKERS: Joi.string().default('localhost:9092'),
+  KAFKA_CLIENT_ID: Joi.string().default('assetbox-api'),
+  KAFKA_GROUP_ID: Joi.string().default('assetbox-consumers'),
 });

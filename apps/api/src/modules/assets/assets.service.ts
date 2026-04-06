@@ -7,8 +7,11 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../../services/storage/storage.service';
+import { KafkaProducerService } from '../../kafka/kafka.producer.service';
+import { AssetUploadedEvent } from '@assetbox/types';
 import {
   CreateAssetDto,
   UpdateAssetDto,
@@ -24,6 +27,7 @@ export class AssetsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     @InjectQueue('media') private readonly mediaQueue: Queue,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   /**
@@ -109,6 +113,21 @@ export class AssetsService {
     );
 
     this.logger.log(`Asset created:  ${asset.id} by user ${userId}`);
+
+    // Publish asset.uploaded event
+    const event: AssetUploadedEvent = {
+      eventId: uuidv4(),
+      timestamp: new Date().toISOString(),
+      payload: {
+        assetId: asset.id,
+        sellerId: userId,
+        fileName: files[0]?.originalname ?? '',
+        fileType: uploadedFiles[0]?.mimeType ?? '',
+        fileSize: Number(uploadedFiles[0]?.fileSize ?? 0),
+        bucketKey: uploadedFiles[0]?.fileUrl ?? '',
+      },
+    };
+    await this.kafkaProducer.emit('asset-events', event);
 
     return this.formatAsset(asset);
   }

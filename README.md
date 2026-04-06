@@ -12,13 +12,13 @@ AssetBox/
 │   ├── api/        # NestJS REST API (port 3001)
 │   ├── web/        # Next.js storefront & dashboard (port 3000)
 │   ├── docs/       # Next.js documentation site (port 3002)
-│   └── workers/    # Background job workers (placeholder)
+│   └── workers/    # Kafka consumer microservice (NestJS)
 ├── packages/
 │   ├── config/         # Shared runtime configuration
 │   ├── database/       # Prisma schema, migrations, and client
 │   ├── email/          # Email service (Resend)
 │   ├── templates/      # React Email templates
-│   ├── types/          # Shared TypeScript types
+│   ├── types/          # Shared TypeScript types (incl. Kafka event interfaces)
 │   ├── ui/             # Shared React component library (@repo/ui)
 │   ├── eslint-config/  # Shared ESLint configuration
 │   └── typescript-config/ # Shared TypeScript configuration
@@ -33,6 +33,42 @@ AssetBox/
 - **Search**: Meilisearch
 - **Queue/Cache**: Redis + BullMQ
 - **Payments**: Stripe
+- **Event Streaming**: Apache Kafka + Zookeeper (event-driven architecture)
+
+### Event-Driven Architecture
+
+AssetBox uses **Apache Kafka** for inter-service event streaming alongside the existing BullMQ queue system (which continues to handle background jobs such as media processing).
+
+```
+┌─────────────┐  asset.uploaded  ┌────────────────────────┐
+│  apps/api   │ ───────────────► │  asset-events topic    │
+│  (Producer) │  asset.purchased ├────────────────────────┤
+│             │ ───────────────► │  purchase-events topic │
+│             │  user.registered ├────────────────────────┤
+│             │ ───────────────► │  user-events topic     │
+└─────────────┘                  └──────────┬─────────────┘
+                                             │
+                        ┌────────────────────┼────────────────────┐
+                        ▼                    ▼                    ▼
+               ┌────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+               │ search-indexer │  │ email-notif.    │  │ analytics       │
+               │ (Meilisearch)  │  │ (Resend emails) │  │ (structured log)│
+               └────────────────┘  └─────────────────┘  └─────────────────┘
+                        │                    │                    │
+                        └────────────────────┴────────────────────┘
+                                             │ on failure
+                                  ┌──────────▼──────────┐
+                                  │  *.dlq topics (DLQ) │
+                                  └─────────────────────┘
+```
+
+**Topics:**
+| Topic | Event | Publisher | Consumers |
+|---|---|---|---|
+| `asset-events` | `asset.uploaded` | `AssetsService` | `SearchIndexerController` |
+| `purchase-events` | `asset.purchased` | `PaymentsService` | `EmailNotificationController`, `AnalyticsController` |
+| `user-events` | `user.registered` | `UsersService` | `EmailNotificationController` |
+| `*.dlq` | Failed messages | `DlqService` | (manual inspection) |
 
 ## Prerequisites
 
@@ -59,6 +95,9 @@ cp .env.example .env
 # API
 cp apps/api/.env.example apps/api/.env.local
 
+# Workers
+cp apps/workers/.env.example apps/workers/.env.local
+
 # Web
 cp apps/web/.env.example apps/web/.env.local
 ```
@@ -71,7 +110,16 @@ Edit each `.env` file with your actual values.
 npm run docker:up
 ```
 
-This starts PostgreSQL, Redis, Meilisearch, and MinIO via Docker Compose.
+This starts PostgreSQL, Redis, Meilisearch, MinIO, **Zookeeper, Kafka, and Kafka UI** via Docker Compose.
+
+| Service | URL |
+|---|---|
+| API | http://localhost:3001/api |
+| Web | http://localhost:3000 |
+| Docs | http://localhost:3002 |
+| MinIO console | http://localhost:9001 |
+| Meilisearch | http://localhost:7700 |
+| **Kafka UI** | **http://localhost:8080** |
 
 ### 4. Initialize the database
 
@@ -85,12 +133,6 @@ npm run db:migrate    # Run database migrations
 ```bash
 npm run dev
 ```
-
-- API: http://localhost:3001/api
-- Web: http://localhost:3000
-- Docs: http://localhost:3002
-- MinIO console: http://localhost:9001
-- Meilisearch: http://localhost:7700
 
 ## Environment Variables
 
@@ -125,6 +167,22 @@ npm run dev
 | `EMAIL_FROM` | Yes | Sender email address |
 | `MEILISEARCH_HOST` | Yes | Meilisearch host URL |
 | `MEILISEARCH_API_KEY` | Yes | Meilisearch API key |
+| `KAFKA_BROKERS` | No | Comma-separated Kafka brokers (default: `localhost:9092`) |
+| `KAFKA_CLIENT_ID` | No | Kafka client ID (default: `assetbox-api`) |
+| `KAFKA_GROUP_ID` | No | Kafka consumer group ID (default: `assetbox-consumers`) |
+
+### `apps/workers/.env.local`
+
+| Variable | Required | Description |
+|---|---|---|
+| `KAFKA_BROKERS` | No | Comma-separated Kafka brokers (default: `localhost:9092`) |
+| `KAFKA_CLIENT_ID` | No | Kafka client ID (default: `assetbox-workers`) |
+| `KAFKA_GROUP_ID` | No | Kafka consumer group ID (default: `assetbox-consumers`) |
+| `MEILISEARCH_HOST` | Yes | Meilisearch host URL |
+| `MEILISEARCH_API_KEY` | Yes | Meilisearch API key |
+| `RESEND_API_KEY` | Yes | Resend API key |
+| `EMAIL_FROM` | Yes | Sender email address |
+| `FRONTEND_URL` | No | Frontend URL for email links |
 
 ### `apps/web/.env.local`
 
@@ -149,7 +207,7 @@ npm run dev
 | `npm run db:migrate` | Run database migrations |
 | `npm run db:push` | Push schema to database (dev only) |
 | `npm run db:studio` | Open Prisma Studio |
-| `npm run docker:up` | Start infrastructure containers |
+| `npm run docker:up` | Start infrastructure containers (incl. Kafka) |
 | `npm run docker:down` | Stop infrastructure containers |
 | `npm run docker:reset` | Reset and restart infrastructure |
 
@@ -161,7 +219,7 @@ The API exposes a health check endpoint:
 GET /api/health
 ```
 
-Returns the status of the database, Redis, and Meilisearch connections.
+Returns the status of the database, Redis, Meilisearch, and **Kafka** connections.
 
 ## Deployment
 
@@ -180,5 +238,5 @@ See `docker-compose.prod.yml` for the full production setup including applicatio
 ## Package Namespaces
 
 This monorepo uses two namespaces:
-- `@assetbox/*` — production app packages (api, web, database, email, templates, config, types)
+- `@assetbox/*` — production app packages (api, web, workers, database, email, templates, config, types)
 - `@repo/*` — shared tooling packages (ui, eslint-config, typescript-config)

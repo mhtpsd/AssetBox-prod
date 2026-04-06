@@ -1,3 +1,11 @@
+// Kafka Event Types
+export type {
+  AssetUploadedEvent,
+  AssetPurchasedEvent,
+  UserRegisteredEvent,
+  KafkaEvent,
+} from './events';
+
 // Re-export Prisma types
 export type {
   User,

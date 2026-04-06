@@ -1,8 +1,11 @@
 import { Injectable, Inject, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
+import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../../services/email/email.service';
+import { KafkaProducerService } from '../../kafka/kafka.producer.service';
+import { AssetPurchasedEvent } from '@assetbox/types';
 
 @Injectable()
 export class PaymentsService {
@@ -13,6 +16,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly email: EmailService,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   /**
@@ -274,6 +278,23 @@ export class PaymentsService {
 
     // Send emails (outside transaction)
     await this.sendOrderEmails(order, cart);
+
+    // Publish asset.purchased events for each order item
+    for (const item of order.items ?? []) {
+      const event: AssetPurchasedEvent = {
+        eventId: uuidv4(),
+        timestamp: new Date().toISOString(),
+        payload: {
+          assetId: item.assetId,
+          buyerId: order.userId,
+          sellerId: item.sellerId ?? '',
+          amount: Number(item.price ?? 0),
+          currency: 'usd',
+          stripePaymentId: stripePaymentId,
+        },
+      };
+      await this.kafkaProducer.emit('purchase-events', event);
+    }
 
     return { orderId: order.id };
   }

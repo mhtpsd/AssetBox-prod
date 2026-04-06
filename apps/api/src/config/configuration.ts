@@ -43,4 +43,10 @@ export default () => ({
     minimumPayoutAmount: parseFloat(process.env. MINIMUM_PAYOUT_AMOUNT || '50'),
     downloadLinkExpiry:  parseInt(process.env.DOWNLOAD_LINK_EXPIRY || '900', 10),
   },
+
+  kafka: {
+    brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+    clientId: process.env.KAFKA_CLIENT_ID || 'assetbox-api',
+    groupId: process.env.KAFKA_GROUP_ID || 'assetbox-consumers',
+  },
 });

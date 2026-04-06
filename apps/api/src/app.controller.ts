@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppService } from './app.service';
 import { PrismaService } from './modules/prisma/prisma.service';
+import { KafkaProducerService } from './kafka/kafka.producer.service';
 import { MeiliSearch } from 'meilisearch';
 import Redis from 'ioredis';
 
@@ -11,6 +12,7 @@ export class AppController {
     private readonly appService: AppService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   @Get()
@@ -66,6 +68,14 @@ export class AppController {
       (checks.services as Record<string, unknown>)['meilisearch'] = { status: 'ok' };
     } catch {
       (checks.services as Record<string, unknown>)['meilisearch'] = { status: 'error' };
+      checks.status = 'degraded';
+    }
+
+    // Kafka check
+    (checks.services as Record<string, unknown>)['kafka'] = {
+      status: this.kafkaProducer.isConnected() ? 'ok' : 'degraded',
+    };
+    if (!this.kafkaProducer.isConnected()) {
       checks.status = 'degraded';
     }
 

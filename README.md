@@ -240,3 +240,174 @@ See `docker-compose.prod.yml` for the full production setup including applicatio
 This monorepo uses two namespaces:
 - `@assetbox/*` — production app packages (api, web, workers, database, email, templates, config, types)
 - `@repo/*` — shared tooling packages (ui, eslint-config, typescript-config)
+
+---
+
+## Docker Images
+
+Three production Docker images are built and published to [GitHub Container Registry (GHCR)](https://ghcr.io/mhtpsd):
+
+| Image | Registry | Description |
+|---|---|---|
+| `assetbox-api` | `ghcr.io/mhtpsd/assetbox-api` | NestJS REST API |
+| `assetbox-web` | `ghcr.io/mhtpsd/assetbox-web` | Next.js storefront + dashboard |
+| `assetbox-workers` | `ghcr.io/mhtpsd/assetbox-workers` | Kafka consumer workers |
+
+### Build images locally
+
+```bash
+# Build API image
+docker build -f apps/api/Dockerfile -t assetbox-api:local .
+
+# Build Web image
+docker build -f apps/web/Dockerfile -t assetbox-web:local .
+
+# Build Workers image
+docker build -f apps/workers/Dockerfile -t assetbox-workers:local .
+```
+
+### Run with Docker Compose (production)
+
+```bash
+# Configure environment
+cp .env.example .env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+cp apps/workers/.env.example apps/workers/.env
+
+# Start all services (includes Kafka, Zookeeper, Workers)
+docker compose -f docker-compose.prod.yml up -d
+```
+
+---
+
+## CI/CD Pipeline
+
+GitHub Actions workflows automate quality checks, image builds, and deployment.
+
+### Workflows
+
+| File | Trigger | Description |
+|---|---|---|
+| `.github/workflows/ci.yml` | Push/PR to `main`/`develop` | Lint → Type check → Build → Test → Docker Build+Push → Deploy |
+| `.github/workflows/docker-build.yml` | Push tag `v*` | Builds and pushes semver-tagged release images |
+
+### Pipeline stages
+
+```
+Push to main
+     │
+     ├─── lint          (ESLint across all packages)
+     ├─── type-check    (tsc --noEmit on API)
+     ├─── build         (Turborepo build all)
+     └─── test          (Jest across all packages)
+              │
+              └─── docker-build  (builds 3 images → pushes to GHCR)
+                         │
+                         └─── deploy  (kubectl set image — configure KUBECONFIG_DATA secret)
+```
+
+### Enabling Kubernetes deployment
+
+1. Add a repository secret named `KUBECONFIG_DATA` (Settings → Secrets → Actions):
+   ```bash
+   cat ~/.kube/config | base64
+   ```
+2. Uncomment the deploy steps in `.github/workflows/ci.yml` under the `deploy` job.
+
+---
+
+## Kubernetes Deployment
+
+Kubernetes manifests are in the `k8s/` directory, organized with [Kustomize](https://kustomize.io/) overlays.
+
+### Directory structure
+
+```
+k8s/
+├── namespace.yaml              # assetbox namespace
+├── base/
+│   ├── api/                    # NestJS API: Deployment + Service + HPA
+│   ├── web/                    # Next.js: Deployment + Service
+│   ├── workers/                # Kafka workers: Deployment + HPA
+│   ├── ingress/                # Nginx Ingress controller routing
+│   ├── postgres/               # PostgreSQL StatefulSet + PVC
+│   ├── redis/                  # Redis Deployment
+│   ├── kafka/                  # Zookeeper + Kafka StatefulSets
+│   ├── meilisearch/            # Meilisearch Deployment + PVC
+│   ├── minio/                  # MinIO Deployment + PVC
+│   └── configmaps-secrets/     # ConfigMap + Secrets template
+└── overlays/
+    ├── dev/                    # 1 replica, lower resources
+    ├── staging/                # 2 replicas, medium resources
+    └── prod/                   # 3+ replicas API, higher resources
+```
+
+### Quick start (local — minikube or kind)
+
+```bash
+# 1. Start a local cluster
+minikube start
+# or: kind create cluster
+
+# 2. Install nginx ingress controller
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml
+
+# 3. Apply secrets (edit the file first — replace base64 placeholders)
+cp k8s/base/configmaps-secrets/secrets.yaml /tmp/assetbox-secrets.yaml
+# Edit /tmp/assetbox-secrets.yaml with real base64-encoded values
+kubectl apply -f /tmp/assetbox-secrets.yaml
+
+# 4. Deploy dev overlay (1 replica, lower resources)
+kubectl apply -k k8s/overlays/dev
+
+# 5. Check pods
+kubectl get pods -n assetbox
+
+# 6. Access via port-forward (or configure /etc/hosts for ingress)
+kubectl port-forward svc/web 3000:3000 -n assetbox &
+kubectl port-forward svc/api 3001:3001 -n assetbox &
+```
+
+### Deploy to different environments
+
+```bash
+# Development (1 replica)
+kubectl apply -k k8s/overlays/dev
+
+# Staging (2 replicas)
+kubectl apply -k k8s/overlays/staging
+
+# Production (3+ replicas API, higher limits)
+kubectl apply -k k8s/overlays/prod
+```
+
+### Production architecture
+
+```
+                    ┌─── Kubernetes Cluster (assetbox namespace) ──────────────┐
+                    │                                                          │
+Internet ──► Nginx  │  ┌─────────┐ ┌─────────┐ ┌─────────┐                  │
+            Ingress─┼─►│ web pod │ │ web pod │ │ web pod │  HPA: 2-10        │
+               │    │  └─────────┘ └─────────┘ └─────────┘                  │
+               │    │                                                          │
+               └────┼─►┌─────────┐ ┌─────────┐ ┌─────────┐  HPA: 2-10      │
+                    │  │ api pod │ │ api pod │ │ api pod │                   │
+                    │  └────┬────┘ └────┬────┘ └────┬────┘                  │
+                    │       └───────────┴───────┬────┘                       │
+                    │                           ▼                             │
+                    │              ┌────────────────────────┐                │
+                    │              │   Kafka (StatefulSet)  │                │
+                    │              └───────────┬────────────┘                │
+                    │                          │                              │
+                    │         ┌────────────────▼────────────────┐            │
+                    │         │  workers pods  (HPA: 1-5)       │            │
+                    │         │  search-indexer │ email │ analytics           │
+                    │         └─────────────────────────────────┘            │
+                    │                                                          │
+                    │  PostgreSQL │ Redis │ Meilisearch │ MinIO               │
+                    │  (StatefulSets + PVCs for persistent storage)           │
+                    └──────────────────────────────────────────────────────────┘
+
+GitHub Actions: Push to main → Lint/Test → Build Docker → Push GHCR → kubectl deploy
+```

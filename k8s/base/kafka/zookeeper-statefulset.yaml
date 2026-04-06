@@ -1,0 +1,63 @@
+# Zookeeper StatefulSet — required by Kafka for cluster coordination
+# In production, consider using KRaft mode (Kafka without ZooKeeper) for Kafka 3.x+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: zookeeper
+    app.kubernetes.io/component: kafka
+    app.kubernetes.io/part-of: assetbox
+spec:
+  serviceName: zookeeper
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zookeeper
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zookeeper
+        app.kubernetes.io/component: kafka
+        app.kubernetes.io/part-of: assetbox
+    spec:
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.5.0
+          ports:
+            - containerPort: 2181
+              name: client
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: '2181'
+            - name: ZOOKEEPER_TICK_TIME
+              value: '2000'
+            - name: ZOOKEEPER_DATA_DIR
+              value: /var/lib/zookeeper/data
+            - name: ZOOKEEPER_LOG_DIR
+              value: /var/lib/zookeeper/log
+          volumeMounts:
+            - name: zookeeper-data
+              mountPath: /var/lib/zookeeper
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ['bash', '-c', 'echo ruok | nc localhost 2181 | grep imok']
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: zookeeper-data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            storage: 5Gi

@@ -1,0 +1,21 @@
+# Zookeeper headless Service — required for StatefulSet stable DNS
+# Each pod gets: zookeeper-0.zookeeper.assetbox.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: zookeeper
+    app.kubernetes.io/component: kafka
+    app.kubernetes.io/part-of: assetbox
+spec:
+  # Headless service (clusterIP: None) for StatefulSet stable network identity
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: zookeeper
+  ports:
+    - name: client
+      protocol: TCP
+      port: 2181
+      targetPort: 2181

@@ -1,0 +1,22 @@
+# Kafka headless Service — internal DNS for StatefulSet pods
+# Kafka broker is accessible within the cluster at: kafka:9092
+# Full DNS: kafka-0.kafka.assetbox.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: kafka
+    app.kubernetes.io/part-of: assetbox
+spec:
+  # Headless service for StatefulSet
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: kafka
+  ports:
+    - name: internal
+      protocol: TCP
+      port: 9092
+      targetPort: 9092

@@ -1,0 +1,62 @@
+# Kafka Workers Deployment
+# Runs Kafka consumer microservices (search indexer, email notifier, analytics)
+# No HTTP probes — this is a Kafka consumer, not an HTTP service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workers
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: workers
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: assetbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: workers
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: workers
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: assetbox
+    spec:
+      containers:
+        - name: workers
+          image: ghcr.io/mhtpsd/assetbox-workers:latest
+          imagePullPolicy: IfNotPresent
+          # Non-sensitive config (Kafka brokers, Redis host, etc.) from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: assetbox-config
+          # Sensitive values from Secret
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: assetbox-secrets
+                  key: DATABASE_URL
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: assetbox-secrets
+                  key: REDIS_PASSWORD
+            - name: MEILI_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: assetbox-secrets
+                  key: MEILI_MASTER_KEY
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: assetbox-secrets
+                  key: RESEND_API_KEY
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          # No liveness/readiness probes — Kafka consumer connects to broker, not HTTP

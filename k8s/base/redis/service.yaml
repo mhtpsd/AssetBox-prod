@@ -1,0 +1,19 @@
+# Redis Service — ClusterIP for internal cluster access only
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: assetbox
+spec:
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: redis
+      protocol: TCP
+      port: 6379
+      targetPort: 6379
+  type: ClusterIP

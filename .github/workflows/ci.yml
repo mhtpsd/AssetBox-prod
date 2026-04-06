@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   lint:
@@ -117,3 +118,125 @@ jobs:
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/assetbox
+
+  # -----------------------------------------------------------------------
+  # Docker Build & Push — only runs on push to main (not on PRs)
+  # Builds all 3 Docker images and pushes to GitHub Container Registry (GHCR)
+  # -----------------------------------------------------------------------
+  docker-build:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    # Only run on push to main, not on pull requests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # All quality gates must pass before building images
+    needs: [lint, type-check, build, test]
+    permissions:
+      contents: read
+      packages: write   # Required to push to GHCR
+    strategy:
+      matrix:
+        include:
+          - app: api
+            dockerfile: apps/api/Dockerfile
+            image: ghcr.io/mhtpsd/assetbox-api
+          - app: web
+            dockerfile: apps/web/Dockerfile
+            image: ghcr.io/mhtpsd/assetbox-web
+          - app: workers
+            dockerfile: apps/workers/Dockerfile
+            image: ghcr.io/mhtpsd/assetbox-workers
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Set up QEMU for multi-platform builds (linux/amd64 + linux/arm64)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # BuildKit enables layer caching and multi-platform builds
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Authenticate to GitHub Container Registry using the built-in GITHUB_TOKEN
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Generate Docker image metadata (tags + labels)
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=,format=short
+
+      # Build and push with layer caching via GitHub Actions cache
+      - name: Build and push ${{ matrix.app }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          # Build for linux/amd64; add linux/arm64 for Apple Silicon / ARM servers
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache Docker layers between runs to speed up builds
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  # -----------------------------------------------------------------------
+  # Deploy — TEMPLATE: configure for your Kubernetes cluster
+  # This job shows the pattern for deploying to K8s after Docker images are pushed
+  # -----------------------------------------------------------------------
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    # Only deploy on push to main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # TEMPLATE: Uncomment and configure the steps below for your cluster.
+      # You need to add KUBECONFIG_DATA as a repository secret (Settings → Secrets).
+      # Get it with: cat ~/.kube/config | base64
+
+      # - name: Set up kubectl
+      #   uses: azure/setup-kubectl@v3
+      #   with:
+      #     version: 'v1.29.0'
+
+      # - name: Configure kubeconfig
+      #   run: |
+      #     mkdir -p $HOME/.kube
+      #     echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > $HOME/.kube/config
+
+      # - name: Deploy to Kubernetes
+      #   run: |
+      #     IMAGE_TAG=${{ github.sha }}
+      #     kubectl set image deployment/api api=ghcr.io/mhtpsd/assetbox-api:${IMAGE_TAG} -n assetbox
+      #     kubectl set image deployment/web web=ghcr.io/mhtpsd/assetbox-web:${IMAGE_TAG} -n assetbox
+      #     kubectl set image deployment/workers workers=ghcr.io/mhtpsd/assetbox-workers:${IMAGE_TAG} -n assetbox
+      #     kubectl rollout status deployment/api -n assetbox --timeout=5m
+      #     kubectl rollout status deployment/web -n assetbox --timeout=5m
+      #     kubectl rollout status deployment/workers -n assetbox --timeout=5m
+
+      # Placeholder step until K8s cluster is configured
+      - name: Deploy (template — configure KUBECONFIG_DATA secret to enable)
+        run: |
+          echo "Docker images pushed to GHCR with tag: ${{ github.sha }}"
+          echo "Configure KUBECONFIG_DATA secret and uncomment the deploy steps above to enable K8s deployment."
+          echo "Images:"
+          echo "  ghcr.io/mhtpsd/assetbox-api:${{ github.sha }}"
+          echo "  ghcr.io/mhtpsd/assetbox-web:${{ github.sha }}"
+          echo "  ghcr.io/mhtpsd/assetbox-workers:${{ github.sha }}"

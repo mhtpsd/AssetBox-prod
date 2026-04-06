@@ -1,0 +1,9 @@
+# Kubernetes namespace for all AssetBox resources
+# Apply with: kubectl apply -f k8s/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: assetbox
+  labels:
+    app.kubernetes.io/part-of: assetbox
+    app.kubernetes.io/managed-by: kubectl

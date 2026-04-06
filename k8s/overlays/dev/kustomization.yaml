@@ -1,0 +1,74 @@
+# Development overlay — lower resource limits, 1 replica each
+# Apply: kubectl apply -k k8s/overlays/dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: assetbox
+
+# Include all base resources
+resources:
+  - ../../namespace.yaml
+  - ../../base/configmaps-secrets/configmap.yaml
+  - ../../base/configmaps-secrets/secrets.yaml
+  - ../../base/postgres/statefulset.yaml
+  - ../../base/postgres/service.yaml
+  - ../../base/postgres/pvc.yaml
+  - ../../base/redis/deployment.yaml
+  - ../../base/redis/service.yaml
+  - ../../base/kafka/zookeeper-statefulset.yaml
+  - ../../base/kafka/zookeeper-service.yaml
+  - ../../base/kafka/kafka-statefulset.yaml
+  - ../../base/kafka/kafka-service.yaml
+  - ../../base/meilisearch/deployment.yaml
+  - ../../base/meilisearch/service.yaml
+  - ../../base/meilisearch/pvc.yaml
+  - ../../base/minio/deployment.yaml
+  - ../../base/minio/service.yaml
+  - ../../base/minio/pvc.yaml
+  - ../../base/api/deployment.yaml
+  - ../../base/api/service.yaml
+  - ../../base/api/hpa.yaml
+  - ../../base/web/deployment.yaml
+  - ../../base/web/service.yaml
+  - ../../base/workers/deployment.yaml
+  - ../../base/workers/hpa.yaml
+  - ../../base/ingress/ingress.yaml
+
+# Dev-specific patches: scale down to 1 replica and reduce resource limits
+patches:
+  # Scale API to 1 replica in dev
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: api
+  # Scale Web to 1 replica in dev
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: web
+  # HPA: dev min replicas = 1
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+    target:
+      kind: HorizontalPodAutoscaler
+      name: api
+
+# Add dev suffix to image tags to use dev-tagged images if available
+# images:
+#   - name: ghcr.io/mhtpsd/assetbox-api
+#     newTag: dev
+#   - name: ghcr.io/mhtpsd/assetbox-web
+#     newTag: dev
+#   - name: ghcr.io/mhtpsd/assetbox-workers
+#     newTag: dev

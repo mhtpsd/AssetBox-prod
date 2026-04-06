@@ -1,0 +1,16 @@
+# Meilisearch Persistent Volume Claim — stores search indexes
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: meilisearch-pvc
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: meilisearch
+    app.kubernetes.io/component: search
+    app.kubernetes.io/part-of: assetbox
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

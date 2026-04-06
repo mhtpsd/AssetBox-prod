@@ -1,0 +1,78 @@
+# Kafka StatefulSet — single-broker Kafka cluster
+# For production HA, increase replicas to 3 and set KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: kafka
+    app.kubernetes.io/part-of: assetbox
+spec:
+  serviceName: kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka
+        app.kubernetes.io/component: kafka
+        app.kubernetes.io/part-of: assetbox
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.5.0
+          ports:
+            - containerPort: 9092
+              name: internal
+          env:
+            # Connect to Zookeeper using its K8s internal DNS
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: zookeeper:2181
+            # PLAINTEXT listener for internal K8s communication
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: PLAINTEXT:PLAINTEXT
+            # Advertise the internal K8s service DNS name
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: PLAINTEXT://kafka:9092
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: PLAINTEXT
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: '1'
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: 'true'
+            - name: KAFKA_LOG_RETENTION_HOURS
+              value: '168'
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: '0'
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          readinessProbe:
+            exec:
+              command:
+                - kafka-topics
+                - --bootstrap-server
+                - localhost:9092
+                - --list
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            storage: 10Gi

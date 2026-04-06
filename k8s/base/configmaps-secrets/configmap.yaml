@@ -1,0 +1,40 @@
+# ConfigMap — non-sensitive environment configuration shared across all pods
+# Sensitive values (passwords, tokens, API keys) belong in secrets.yaml, NOT here
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assetbox-config
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: assetbox-config
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: assetbox
+data:
+  # Application
+  NODE_ENV: production
+  API_PORT: "3001"
+
+  # Kafka — internal K8s DNS (kafka service in the assetbox namespace)
+  KAFKA_BROKERS: kafka:9092
+  KAFKA_CLIENT_ID: assetbox-api
+  KAFKA_GROUP_ID: assetbox-consumers
+
+  # Redis — internal K8s DNS
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+
+  # Meilisearch — internal K8s DNS
+  MEILISEARCH_HOST: http://meilisearch:7700
+
+  # MinIO — internal K8s DNS
+  MINIO_ENDPOINT: minio
+  MINIO_PORT: "9000"
+  MINIO_USE_SSL: "false"
+  MINIO_BUCKET_NAME: assetbox-assets
+
+  # Next.js public config
+  NEXT_PUBLIC_API_URL: https://assetbox.example.com/api
+  NEXTAUTH_URL: https://assetbox.example.com
+
+  # Frontend URL (used by API for CORS)
+  FRONTEND_URL: https://assetbox.example.com

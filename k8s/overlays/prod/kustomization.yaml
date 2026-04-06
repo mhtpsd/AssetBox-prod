@@ -1,0 +1,100 @@
+# Production overlay — 3+ replicas for API, higher resource limits, stricter settings
+# Apply: kubectl apply -k k8s/overlays/prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: assetbox
+
+resources:
+  - ../../namespace.yaml
+  - ../../base/configmaps-secrets/configmap.yaml
+  - ../../base/configmaps-secrets/secrets.yaml
+  - ../../base/postgres/statefulset.yaml
+  - ../../base/postgres/service.yaml
+  - ../../base/postgres/pvc.yaml
+  - ../../base/redis/deployment.yaml
+  - ../../base/redis/service.yaml
+  - ../../base/kafka/zookeeper-statefulset.yaml
+  - ../../base/kafka/zookeeper-service.yaml
+  - ../../base/kafka/kafka-statefulset.yaml
+  - ../../base/kafka/kafka-service.yaml
+  - ../../base/meilisearch/deployment.yaml
+  - ../../base/meilisearch/service.yaml
+  - ../../base/meilisearch/pvc.yaml
+  - ../../base/minio/deployment.yaml
+  - ../../base/minio/service.yaml
+  - ../../base/minio/pvc.yaml
+  - ../../base/api/deployment.yaml
+  - ../../base/api/service.yaml
+  - ../../base/api/hpa.yaml
+  - ../../base/web/deployment.yaml
+  - ../../base/web/service.yaml
+  - ../../base/workers/deployment.yaml
+  - ../../base/workers/hpa.yaml
+  - ../../base/ingress/ingress.yaml
+
+# Production patches: scale up API to 3 replicas, increase resource limits
+patches:
+  # API: 3 replicas minimum in production
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: api
+  # API HPA: min 3, max 10 in production
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+    target:
+      kind: HorizontalPodAutoscaler
+      name: api
+  # API: higher resource limits in production
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+    target:
+      kind: Deployment
+      name: api
+  # Web: 3 replicas in production
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: web
+  # Workers: 2 replicas minimum in production
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: workers
+  # Workers HPA: min 2, max 5 in production
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+    target:
+      kind: HorizontalPodAutoscaler
+      name: workers
+
+# Pin to specific commit SHA for production releases (updated by CI/CD)
+# images:
+#   - name: ghcr.io/mhtpsd/assetbox-api
+#     newTag: "abc123sha"
+#   - name: ghcr.io/mhtpsd/assetbox-web
+#     newTag: "abc123sha"
+#   - name: ghcr.io/mhtpsd/assetbox-workers
+#     newTag: "abc123sha"

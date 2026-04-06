@@ -1,0 +1,54 @@
+# Redis Deployment — in-memory cache and BullMQ job queue
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: assetbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/component: cache
+        app.kubernetes.io/part-of: assetbox
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          # Pass requirepass via env var; the secret is injected at runtime
+          command:
+            - redis-server
+            - --appendonly
+            - 'yes'
+            - --requirepass
+            - $(REDIS_PASSWORD)
+          ports:
+            - containerPort: 6379
+              name: redis
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: assetbox-secrets
+                  key: REDIS_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          readinessProbe:
+            exec:
+              command: ['redis-cli', '-a', '$(REDIS_PASSWORD)', 'ping']
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3

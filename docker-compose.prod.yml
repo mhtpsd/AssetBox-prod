@@ -119,11 +119,82 @@ services:
     networks:
       - assetbox-network
 
+  # Zookeeper — required by Kafka for cluster coordination
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: assetbox-zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ['CMD', 'bash', '-c', 'echo ruok | nc localhost 2181 | grep imok']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - assetbox-network
+
+  # Kafka broker — event streaming for asset, purchase, and user events
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: assetbox-kafka
+    restart: always
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ['CMD', 'kafka-topics', '--bootstrap-server', 'localhost:9092', '--list']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - assetbox-network
+
+  # Kafka consumer workers — search indexer, email notifier, analytics
+  workers:
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    container_name: assetbox-workers
+    restart: always
+    env_file:
+      - apps/workers/.env
+    environment:
+      NODE_ENV: production
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CLIENT_ID: assetbox-workers
+      KAFKA_GROUP_ID: assetbox-consumers
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - assetbox-network
+
 volumes:
   postgres_data:
   redis_data:
   meilisearch_data:
   minio_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
 
 networks:
   assetbox-network:

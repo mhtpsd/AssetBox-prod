@@ -1,0 +1,18 @@
+# PostgreSQL Persistent Volume Claim
+# Note: When using StatefulSet with volumeClaimTemplates, this PVC is created automatically.
+# This file is kept as a reference / for standalone deployments.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: assetbox
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: assetbox
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

@@ -13,7 +13,7 @@ import { EmailModule } from '../../services/email/email.module';
       provide: 'STRIPE',
       useFactory: (configService: ConfigService) => {
         return new Stripe(configService.get<string>('stripe.secretKey')!, {
-          apiVersion: '2025-01-27.acacia',
+          apiVersion: '2025-02-24.acacia',
         });
       },
       inject: [ConfigService],

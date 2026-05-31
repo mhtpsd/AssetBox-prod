@@ -1,8 +1,21 @@
 # AssetBox
 
-A digital asset marketplace monorepo — buy and sell digital assets (audio, video, graphics, templates, and more) at scale.
+[![CI](https://github.com/mhtpsd/AssetBox-prod/actions/workflows/ci.yml/badge.svg)](https://github.com/mhtpsd/AssetBox-prod/actions/workflows/ci.yml)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=next.js&logoColor=white)
+![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white)
+![Kafka](https://img.shields.io/badge/Kafka-231F20?style=flat-square&logo=apachekafka&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-316192?style=flat-square&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Architecture
+A **production-grade digital asset marketplace** monorepo — buy and sell digital assets (audio, video, graphics, templates, and more) at scale. Built with a Turborepo monorepo, NestJS, Next.js 15, and an event-driven Kafka pipeline.
+
+---
+
+## 🏗️ Architecture
 
 This is a [Turborepo](https://turbo.build/repo) monorepo with the following structure:
 
@@ -25,44 +38,42 @@ AssetBox/
 └── docker-compose.yml  # Local development infrastructure
 ```
 
-**Tech Stack:**
-- **Backend**: NestJS + Prisma ORM + PostgreSQL
-- **Frontend**: Next.js 15 + React 18 + NextAuth (magic links) + TanStack Query
-- **Email**: Resend + React Email
-- **Storage**: MinIO (S3-compatible)
-- **Search**: Meilisearch
-- **Queue/Cache**: Redis + BullMQ
-- **Payments**: Stripe
-- **Event Streaming**: Apache Kafka + Zookeeper (event-driven architecture)
-
 ### Event-Driven Architecture
 
-AssetBox uses **Apache Kafka** for inter-service event streaming alongside the existing BullMQ queue system (which continues to handle background jobs such as media processing).
+```mermaid
+flowchart TD
+    subgraph API["apps/api (NestJS — Producer)"]
+        A1[AssetsService] -->|asset.uploaded| KT1[[asset-events topic]]
+        A2[PaymentsService] -->|asset.purchased| KT2[[purchase-events topic]]
+        A3[UsersService] -->|user.registered| KT3[[user-events topic]]
+    end
 
-```
-┌─────────────┐  asset.uploaded  ┌────────────────────────┐
-│  apps/api   │ ───────────────► │  asset-events topic    │
-│  (Producer) │  asset.purchased ├────────────────────────┤
-│             │ ───────────────► │  purchase-events topic │
-│             │  user.registered ├────────────────────────┤
-│             │ ───────────────► │  user-events topic     │
-└─────────────┘                  └──────────┬─────────────┘
-                                             │
-                        ┌────────────────────┼────────────────────┐
-                        ▼                    ▼                    ▼
-               ┌────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-               │ search-indexer │  │ email-notif.    │  │ analytics       │
-               │ (Meilisearch)  │  │ (Resend emails) │  │ (structured log)│
-               └────────────────┘  └─────────────────┘  └─────────────────┘
-                        │                    │                    │
-                        └────────────────────┴────────────────────┘
-                                             │ on failure
-                                  ┌──────────▼──────────┐
-                                  │  *.dlq topics (DLQ) │
-                                  └─────────────────────┘
+    subgraph Consumers["apps/workers (Kafka Consumers)"]
+        C1[SearchIndexerController]
+        C2[EmailNotificationController]
+        C3[AnalyticsController]
+    end
+
+    subgraph DLQ["Dead Letter Queues"]
+        D1[["*.dlq topics"]]
+    end
+
+    KT1 -->|consume| C1
+    KT2 -->|consume| C2
+    KT2 -->|consume| C3
+    KT3 -->|consume| C2
+
+    C1 -->|index| MS[(Meilisearch)]
+    C2 -->|send email| RE[Resend]
+    C3 -->|structured log| PG[(PostgreSQL)]
+
+    C1 -->|on failure| D1
+    C2 -->|on failure| D1
+    C3 -->|on failure| D1
 ```
 
-**Topics:**
+**Kafka Topics:**
+
 | Topic | Event | Publisher | Consumers |
 |---|---|---|---|
 | `asset-events` | `asset.uploaded` | `AssetsService` | `SearchIndexerController` |
@@ -70,71 +81,94 @@ AssetBox uses **Apache Kafka** for inter-service event streaming alongside the e
 | `user-events` | `user.registered` | `UsersService` | `EmailNotificationController` |
 | `*.dlq` | Failed messages | `DlqService` | (manual inspection) |
 
-## Prerequisites
+---
+
+## ✨ Features
+
+- 🛒 **Digital asset marketplace** — buy and sell audio, video, graphics, templates, and more
+- ⚡ **Event-driven pipeline** — Kafka decouples asset uploads, purchases, and user events from downstream processing
+- 🔍 **Full-text search** — Meilisearch powers fast, typo-tolerant asset discovery
+- 📧 **Transactional email** — Resend + React Email for magic-link auth and purchase notifications
+- 🗃️ **Object storage** — MinIO (S3-compatible) for secure asset file storage
+- 💳 **Stripe payments** — checkout, webhooks, and purchase tracking
+- 🔐 **Magic link auth** — NextAuth with Prisma adapter, no passwords required
+- ☸️ **Kubernetes-ready** — Kustomize overlays for dev/staging/prod, HPA autoscaling
+- 🔄 **Background jobs** — BullMQ + Redis for media processing and queued tasks
+- 🧱 **Turborepo monorepo** — shared packages, unified lint/build/test pipeline
+
+---
+
+## 🔧 Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | TypeScript 5 |
+| Backend | NestJS + Prisma ORM |
+| Frontend | Next.js 15 + React 18 + TanStack Query |
+| Auth | NextAuth (magic links) |
+| Database | PostgreSQL 16 + Flyway-style Prisma migrations |
+| Cache / Queue | Redis 7 + BullMQ |
+| Messaging | Apache Kafka + Zookeeper |
+| Search | Meilisearch |
+| Storage | MinIO (S3-compatible) |
+| Payments | Stripe |
+| Email | Resend + React Email |
+| Containers | Docker + Docker Compose |
+| Orchestration | Kubernetes + Kustomize |
+| CI/CD | GitHub Actions |
+| Monorepo | Turborepo |
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
 
 - Node.js >= 18
 - npm 10
 - Docker & Docker Compose
 
-## Setup
-
-### 1. Clone and install
+### Run with Docker Compose
 
 ```bash
+# Clone
 git clone https://github.com/mhtpsd/AssetBox-prod.git
 cd AssetBox-prod
+
+# Install dependencies
 npm install
-```
 
-### 2. Configure environment variables
-
-```bash
-# Root (docker-compose secrets)
+# Copy environment files
 cp .env.example .env
-
-# API
 cp apps/api/.env.example apps/api/.env.local
-
-# Workers
 cp apps/workers/.env.example apps/workers/.env.local
-
-# Web
 cp apps/web/.env.example apps/web/.env.local
-```
 
-Edit each `.env` file with your actual values.
-
-### 3. Start infrastructure
-
-```bash
+# Start infrastructure (PostgreSQL, Redis, Meilisearch, MinIO, Kafka, Zookeeper)
 npm run docker:up
-```
 
-This starts PostgreSQL, Redis, Meilisearch, MinIO, **Zookeeper, Kafka, and Kafka UI** via Docker Compose.
+# Initialize the database
+npm run db:generate
+npm run db:migrate
 
-| Service | URL |
-|---|---|
-| API | http://localhost:3001/api |
-| Web | http://localhost:3000 |
-| Docs | http://localhost:3002 |
-| MinIO console | http://localhost:9001 |
-| Meilisearch | http://localhost:7700 |
-| **Kafka UI** | **http://localhost:8080** |
-
-### 4. Initialize the database
-
-```bash
-npm run db:generate   # Generate Prisma client
-npm run db:migrate    # Run database migrations
-```
-
-### 5. Start development servers
-
-```bash
+# Start all apps in development mode
 npm run dev
 ```
 
-## Environment Variables
+Services running locally:
+
+| Service | URL |
+|---|---|
+| Web | http://localhost:3000 |
+| API | http://localhost:3001/api |
+| Docs | http://localhost:3002 |
+| MinIO Console | http://localhost:9001 |
+| Meilisearch | http://localhost:7700 |
+| Kafka UI | http://localhost:8080 |
+
+---
+
+## ⚙️ Configuration
 
 ### Root `.env` (Docker Compose)
 
@@ -195,7 +229,121 @@ npm run dev
 | `RESEND_API_KEY` | Yes | Resend API key |
 | `EMAIL_FROM` | Yes | Sender email address |
 
-## Available Scripts
+---
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm run test
+
+# Lint all apps and packages
+npm run lint
+
+# Type check
+npm run type-check
+
+# Build all apps and packages
+npm run build
+```
+
+---
+
+## 🐳 Docker
+
+```bash
+# Build API image
+docker build -f apps/api/Dockerfile -t assetbox-api:local .
+
+# Build Web image
+docker build -f apps/web/Dockerfile -t assetbox-web:local .
+
+# Build Workers image
+docker build -f apps/workers/Dockerfile -t assetbox-workers:local .
+
+# Run production stack
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Three production Docker images are published to [GitHub Container Registry (GHCR)](https://ghcr.io/mhtpsd):
+
+| Image | Registry |
+|---|---|
+| `assetbox-api` | `ghcr.io/mhtpsd/assetbox-api` |
+| `assetbox-web` | `ghcr.io/mhtpsd/assetbox-web` |
+| `assetbox-workers` | `ghcr.io/mhtpsd/assetbox-workers` |
+
+---
+
+## ☸️ Kubernetes
+
+Kubernetes manifests live in `k8s/`, organized with [Kustomize](https://kustomize.io/) overlays.
+
+```
+k8s/
+├── namespace.yaml
+├── base/
+│   ├── api/            # NestJS API: Deployment + Service + HPA
+│   ├── web/            # Next.js: Deployment + Service
+│   ├── workers/        # Kafka workers: Deployment + HPA
+│   ├── ingress/        # Nginx Ingress routing
+│   ├── postgres/       # PostgreSQL StatefulSet + PVC
+│   ├── redis/          # Redis Deployment
+│   ├── kafka/          # Zookeeper + Kafka StatefulSets
+│   ├── meilisearch/    # Meilisearch Deployment + PVC
+│   ├── minio/          # MinIO Deployment + PVC
+│   └── configmaps-secrets/
+└── overlays/
+    ├── dev/            # 1 replica, lower resources
+    ├── staging/        # 2 replicas, medium resources
+    └── prod/           # 3+ replicas API, higher resources
+```
+
+```bash
+# Development (1 replica)
+kubectl apply -k k8s/overlays/dev
+
+# Staging (2 replicas)
+kubectl apply -k k8s/overlays/staging
+
+# Production (3+ replicas)
+kubectl apply -k k8s/overlays/prod
+
+# Check pods
+kubectl get pods -n assetbox
+```
+
+---
+
+## 📊 CI/CD Pipeline
+
+GitHub Actions workflows automate quality checks, image builds, and deployment.
+
+| Workflow | Trigger | Description |
+|---|---|---|
+| `ci.yml` | Push/PR to `main`/`develop` | Lint → Type check → Build → Test → Docker Build+Push → Deploy |
+| `docker-build.yml` | Push tag `v*` | Builds and pushes semver-tagged release images |
+
+Pipeline flow:
+
+```
+Push to main
+     │
+     ├─── lint          (ESLint across all packages)
+     ├─── type-check    (tsc --noEmit on API)
+     ├─── build         (Turborepo build all)
+     └─── test          (Jest across all packages)
+               │
+               └─── docker-build  (builds 3 images → pushes to GHCR)
+                          │
+                          └─── deploy  (kubectl set image)
+```
+
+To enable Kubernetes deployment, add a `KUBECONFIG_DATA` secret (base64-encoded `~/.kube/config`) to your repository secrets and uncomment the deploy steps in `ci.yml`.
+
+---
+
+## 📁 Available Scripts
 
 | Script | Description |
 |---|---|
@@ -207,207 +355,12 @@ npm run dev
 | `npm run db:migrate` | Run database migrations |
 | `npm run db:push` | Push schema to database (dev only) |
 | `npm run db:studio` | Open Prisma Studio |
-| `npm run docker:up` | Start infrastructure containers (incl. Kafka) |
+| `npm run docker:up` | Start infrastructure containers |
 | `npm run docker:down` | Stop infrastructure containers |
 | `npm run docker:reset` | Reset and restart infrastructure |
 
-## Health Check
-
-The API exposes a health check endpoint:
-
-```
-GET /api/health
-```
-
-Returns the status of the database, Redis, Meilisearch, and **Kafka** connections.
-
-## Deployment
-
-### Docker Compose (Production)
-
-```bash
-cp .env.example .env          # fill in production values
-cp apps/api/.env.example apps/api/.env   # fill in API vars
-cp apps/web/.env.example apps/web/.env   # fill in web vars
-
-docker compose -f docker-compose.prod.yml up -d
-```
-
-See `docker-compose.prod.yml` for the full production setup including application containers.
-
-## Package Namespaces
-
-This monorepo uses two namespaces:
-- `@assetbox/*` — production app packages (api, web, workers, database, email, templates, config, types)
-- `@repo/*` — shared tooling packages (ui, eslint-config, typescript-config)
-
 ---
 
-## Docker Images
+## 📄 License
 
-Three production Docker images are built and published to [GitHub Container Registry (GHCR)](https://ghcr.io/mhtpsd):
-
-| Image | Registry | Description |
-|---|---|---|
-| `assetbox-api` | `ghcr.io/mhtpsd/assetbox-api` | NestJS REST API |
-| `assetbox-web` | `ghcr.io/mhtpsd/assetbox-web` | Next.js storefront + dashboard |
-| `assetbox-workers` | `ghcr.io/mhtpsd/assetbox-workers` | Kafka consumer workers |
-
-### Build images locally
-
-```bash
-# Build API image
-docker build -f apps/api/Dockerfile -t assetbox-api:local .
-
-# Build Web image
-docker build -f apps/web/Dockerfile -t assetbox-web:local .
-
-# Build Workers image
-docker build -f apps/workers/Dockerfile -t assetbox-workers:local .
-```
-
-### Run with Docker Compose (production)
-
-```bash
-# Configure environment
-cp .env.example .env
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
-cp apps/workers/.env.example apps/workers/.env
-
-# Start all services (includes Kafka, Zookeeper, Workers)
-docker compose -f docker-compose.prod.yml up -d
-```
-
----
-
-## CI/CD Pipeline
-
-GitHub Actions workflows automate quality checks, image builds, and deployment.
-
-### Workflows
-
-| File | Trigger | Description |
-|---|---|---|
-| `.github/workflows/ci.yml` | Push/PR to `main`/`develop` | Lint → Type check → Build → Test → Docker Build+Push → Deploy |
-| `.github/workflows/docker-build.yml` | Push tag `v*` | Builds and pushes semver-tagged release images |
-
-### Pipeline stages
-
-```
-Push to main
-     │
-     ├─── lint          (ESLint across all packages)
-     ├─── type-check    (tsc --noEmit on API)
-     ├─── build         (Turborepo build all)
-     └─── test          (Jest across all packages)
-              │
-              └─── docker-build  (builds 3 images → pushes to GHCR)
-                         │
-                         └─── deploy  (kubectl set image — configure KUBECONFIG_DATA secret)
-```
-
-### Enabling Kubernetes deployment
-
-1. Add a repository secret named `KUBECONFIG_DATA` (Settings → Secrets → Actions):
-   ```bash
-   cat ~/.kube/config | base64
-   ```
-2. Uncomment the deploy steps in `.github/workflows/ci.yml` under the `deploy` job.
-
----
-
-## Kubernetes Deployment
-
-Kubernetes manifests are in the `k8s/` directory, organized with [Kustomize](https://kustomize.io/) overlays.
-
-### Directory structure
-
-```
-k8s/
-├── namespace.yaml              # assetbox namespace
-├── base/
-│   ├── api/                    # NestJS API: Deployment + Service + HPA
-│   ├── web/                    # Next.js: Deployment + Service
-│   ├── workers/                # Kafka workers: Deployment + HPA
-│   ├── ingress/                # Nginx Ingress controller routing
-│   ├── postgres/               # PostgreSQL StatefulSet + PVC
-│   ├── redis/                  # Redis Deployment
-│   ├── kafka/                  # Zookeeper + Kafka StatefulSets
-│   ├── meilisearch/            # Meilisearch Deployment + PVC
-│   ├── minio/                  # MinIO Deployment + PVC
-│   └── configmaps-secrets/     # ConfigMap + Secrets template
-└── overlays/
-    ├── dev/                    # 1 replica, lower resources
-    ├── staging/                # 2 replicas, medium resources
-    └── prod/                   # 3+ replicas API, higher resources
-```
-
-### Quick start (local — minikube or kind)
-
-```bash
-# 1. Start a local cluster
-minikube start
-# or: kind create cluster
-
-# 2. Install nginx ingress controller
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml
-
-# 3. Apply secrets (edit the file first — replace base64 placeholders)
-cp k8s/base/configmaps-secrets/secrets.yaml /tmp/assetbox-secrets.yaml
-# Edit /tmp/assetbox-secrets.yaml with real base64-encoded values
-kubectl apply -f /tmp/assetbox-secrets.yaml
-
-# 4. Deploy dev overlay (1 replica, lower resources)
-kubectl apply -k k8s/overlays/dev
-
-# 5. Check pods
-kubectl get pods -n assetbox
-
-# 6. Access via port-forward (or configure /etc/hosts for ingress)
-kubectl port-forward svc/web 3000:3000 -n assetbox &
-kubectl port-forward svc/api 3001:3001 -n assetbox &
-```
-
-### Deploy to different environments
-
-```bash
-# Development (1 replica)
-kubectl apply -k k8s/overlays/dev
-
-# Staging (2 replicas)
-kubectl apply -k k8s/overlays/staging
-
-# Production (3+ replicas API, higher limits)
-kubectl apply -k k8s/overlays/prod
-```
-
-### Production architecture
-
-```
-                    ┌─── Kubernetes Cluster (assetbox namespace) ──────────────┐
-                    │                                                          │
-Internet ──► Nginx  │  ┌─────────┐ ┌─────────┐ ┌─────────┐                  │
-            Ingress─┼─►│ web pod │ │ web pod │ │ web pod │  HPA: 2-10        │
-               │    │  └─────────┘ └─────────┘ └─────────┘                  │
-               │    │                                                          │
-               └────┼─►┌─────────┐ ┌─────────┐ ┌─────────┐  HPA: 2-10      │
-                    │  │ api pod │ │ api pod │ │ api pod │                   │
-                    │  └────┬────┘ └────┬────┘ └────┬────┘                  │
-                    │       └───────────┴───────┬────┘                       │
-                    │                           ▼                             │
-                    │              ┌────────────────────────┐                │
-                    │              │   Kafka (StatefulSet)  │                │
-                    │              └───────────┬────────────┘                │
-                    │                          │                              │
-                    │         ┌────────────────▼────────────────┐            │
-                    │         │  workers pods  (HPA: 1-5)       │            │
-                    │         │  search-indexer │ email │ analytics           │
-                    │         └─────────────────────────────────┘            │
-                    │                                                          │
-                    │  PostgreSQL │ Redis │ Meilisearch │ MinIO               │
-                    │  (StatefulSets + PVCs for persistent storage)           │
-                    └──────────────────────────────────────────────────────────┘
-
-GitHub Actions: Push to main → Lint/Test → Build Docker → Push GHCR → kubectl deploy
-```
+MIT © [Mohit Prasad](https://github.com/mhtpsd)
